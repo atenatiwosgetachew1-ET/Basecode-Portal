@@ -10,25 +10,45 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
+import logging
 import os
-from dotenv import load_dotenv
+import sys
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
+logger = logging.getLogger("django")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+
+def _env_bool(key: str, default: bool = False) -> bool:
+    value = (os.getenv(key) or "").strip().lower()
+    if not value:
+        return default
+    return value in {"1", "true", "yes", "on"}
+
+
+def _env_list(key: str, default: str = "") -> list[str]:
+    raw = os.getenv(key, default) or ""
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-j9_g260u_svgoj1ze9@64!&ad51(e^4a9o=9bs7(u$rumtftd%'
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    "django-insecure-j9_g260u_svgoj1ze9@64!&ad51(e^4a9o=9bs7(u$rumtftd%",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _env_bool("DEBUG", True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = _env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 
 # Application definition
@@ -41,6 +61,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'rest_framework.authtoken',
     # your apps
     'app',
 ]
@@ -76,19 +98,42 @@ TEMPLATES = [
 WSGI_APPLICATION = 'portal.wsgi.application'
 
 
-# Database
+# Database — PostgreSQL only (see backend/portal/.env)
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+_db_name = (os.getenv("DB_NAME") or "").strip()
+_db_user = (os.getenv("DB_USER") or "").strip()
+RUNNING_TESTS = "test" in sys.argv
+
+if RUNNING_TESTS and _env_bool("USE_SQLITE_FOR_TESTS", True):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "test.sqlite3",
+        }
     }
-}
+else:
+    if not _db_name or not _db_user:
+        raise ImproperlyConfigured(
+            "PostgreSQL is required. Set DB_NAME and DB_USER in backend/portal/.env "
+            "(copy from .env.example). Optional: DB_PASSWORD, DB_HOST, DB_PORT. "
+            "Tests can use SQLite by default."
+        )
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": _db_name,
+            "USER": _db_user,
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST") or "localhost",
+            "PORT": os.getenv("DB_PORT") or "5432",
+            "OPTIONS": {},
+        }
+    }
+
+    if sslmode := (os.getenv("DB_SSLMODE") or "").strip():
+        DATABASES["default"]["OPTIONS"]["sslmode"] = sslmode
 
 
 # Password validation
@@ -125,11 +170,115 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
+_default_frontend_origins = "http://localhost:5173,http://127.0.0.1:5173"
+
+CORS_ALLOWED_ORIGINS = _env_list("CORS_ALLOWED_ORIGINS", _default_frontend_origins)
 
 # Optional: allow cookies/sessions if needed
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS", _default_frontend_origins)
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", not DEBUG)
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = _env_bool("CSRF_COOKIE_SECURE", SESSION_COOKIE_SECURE)
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+
+if not DEBUG:
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool(
+        "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+        True,
+    )
+    SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", False)
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+
+def _env_strip(key: str, default: str = "") -> str:
+    v = (os.getenv(key) or default or "").strip()
+    if len(v) >= 2 and ((v[0] == v[-1] == '"') or (v[0] == v[-1] == "'")):
+        v = v[1:-1].strip()
+    return v
+
+
+EMAIL_HOST_USER = _env_strip("EMAIL_HOST_USER", "qedamaitechnologies@gmail.com")
+EMAIL_HOST_PASSWORD = _env_strip("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = _env_strip("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "qedamaitechnologies@gmail.com")
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Gmail: use an App Password (Google Account → Security → 2-Step Verification → App passwords).
+# If EMAIL_HOST_PASSWORD is empty, mail is only printed to the console — nothing is delivered.
+EMAIL_BACKEND = _env_strip("EMAIL_BACKEND")
+if not EMAIL_BACKEND:
+    if EMAIL_HOST_PASSWORD:
+        EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    else:
+        EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+if EMAIL_BACKEND.endswith("smtp.EmailBackend"):
+    EMAIL_HOST = _env_strip("EMAIL_HOST", "smtp.gmail.com")
+    EMAIL_PORT = int(_env_strip("EMAIL_PORT", "587") or "587")
+    EMAIL_USE_TLS = _env_strip("EMAIL_USE_TLS", "true").lower() in ("1", "true", "yes")
+    EMAIL_USE_SSL = _env_strip("EMAIL_USE_SSL", "false").lower() in ("1", "true", "yes")
+    if EMAIL_USE_SSL:
+        EMAIL_USE_TLS = False
+    EMAIL_TIMEOUT = int(_env_strip("EMAIL_TIMEOUT", "30") or "30")
+else:
+    EMAIL_TIMEOUT = 10
+
+if EMAIL_BACKEND.endswith("console.EmailBackend"):
+    logger.warning(
+        "Email: using console backend - emails are NOT sent. "
+        "Set EMAIL_HOST_PASSWORD in backend/portal/.env (Gmail App Password) to use SMTP."
+    )
+
+# Google Identity Services (Sign in with Google) — Web client ID from Google Cloud Console
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "app": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

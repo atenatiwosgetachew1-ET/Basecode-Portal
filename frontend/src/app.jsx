@@ -1,108 +1,45 @@
-'use client'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import DashboardLayout from './components/layout/DashboardLayout'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
+import DashboardPage from './pages/DashboardPage'
+import UsersManagementPage from './pages/UsersManagementPage'
+import SettingsPage from './pages/SettingsPage'
+import ActivityLogPage from './pages/ActivityLogPage'
+import ProtectedRoute from './routes/ProtectedRoute'
+import './App.css'
 
-import { useState } from 'react'
-
-export default function LoginPortal() {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [user, setUser] = useState(null)
-
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    try {
-      const response = await fetch('http://localhost:8000/api/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // important if using cookies/sessions
-        body: JSON.stringify({ username, password })
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setUser(data.user)
-        setUsername('')
-        setPassword('')
-      } else {
-        setError(data.message || 'Login failed')
-      }
-    } catch (err) {
-      setError('Connection error. Make sure the backend is running on port 8000')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleLogout = () => {
-    setUser(null)
-  }
-
+export default function App() {
   return (
-    <div style={{ padding: '40px', fontFamily: 'Arial, sans-serif', maxWidth: '400px', margin: '100px auto' }}>
-      <h1>Login Portal</h1>
-      <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Username</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter username"
-            style={{
-              width: '100%',
-              padding: '10px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '14px',
-              boxSizing: 'border-box'
-            }}
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter password"
-            style={{
-              width: '100%',
-              padding: '10px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '14px',
-              boxSizing: 'border-box'
-            }}
-          />
-        </div>
-        {error && <div style={{ color: '#d32f2f', fontSize: '14px', padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px' }}>{error}</div>}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '12px',
-            backgroundColor: loading ? '#ccc' : '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '16px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-      </form>
-      
-      <div style={{ marginTop: '30px', padding: '15px', backgroundColor: '#f0f0f0', borderRadius: '4px', fontSize: '13px' }}>
-        <p><strong>Demo Credentials:</strong></p>
-        <p>• superuser / superadmin</p>
-      </div>
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DashboardPage />} />
+            <Route path="users" element={<UsersManagementPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="activity" element={<ActivityLogPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }

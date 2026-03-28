@@ -1,0 +1,112 @@
+from django.contrib.auth.models import User
+from rest_framework import generics, status
+from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.response import Response
+
+from .audit_log import log_audit
+from .auth_utils import can_manage_users, get_profile_role, is_superadmin
+from .models import Notification, Profile
+from .serializers import UserCreateSerializer, UserListSerializer, UserUpdateSerializer
+
+
+class IsSuperadminOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and can_manage_users(user))
+
+
+class UserListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsSuperadminOrAdmin]
+    queryset = User.objects.all().select_related("profile").order_by("id")
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return UserCreateSerializer
+        return UserListSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        role = get_profile_role(self.request.user)
+        if role == Profile.ROLE_SUPERADMIN:
+            return qs
+        if role == Profile.ROLE_ADMIN:
+            return qs.filter(profile__role__in=[Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER])
+        return qs.none()
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        log_audit(
+            self.request.user,
+            "user.create",
+            resource_type="user",
+            resource_id=user.pk,
+            summary=f"Created user {user.username}",
+            metadata={"username": user.username},
+        )
+        Notification.objects.create(
+            user=user,
+            title="Welcome",
+            body=(
+                f"Your account «{user.username}» is ready. "
+                "You can sign in with the credentials you were given."
+            ),
+            kind=Notification.KIND_SUCCESS,
+        )
+
+
+class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsSuperadminOrAdmin]
+    queryset = User.objects.all().select_related("profile")
+    lookup_field = "pk"
+
+    def get_serializer_class(self):
+        if self.request.method in ("PATCH", "PUT"):
+            return UserUpdateSerializer
+        return UserListSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        role = get_profile_role(self.request.user)
+        if role == Profile.ROLE_SUPERADMIN:
+            return qs
+        if role == Profile.ROLE_ADMIN:
+            return qs.filter(profile__role__in=[Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER])
+        return qs.none()
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_audit(
+            self.request.user,
+            "user.update",
+            resource_type="user",
+            resource_id=instance.pk,
+            summary=f"Updated user {instance.username}",
+            metadata={"username": instance.username},
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.pk == request.user.pk:
+            return Response(
+                {"detail": "You cannot delete your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not is_superadmin(request.user):
+            target_role = get_profile_role(instance)
+            if target_role not in (Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER):
+                return Response(
+                    {"detail": "You do not have permission to delete this account."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        return super().destroy(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        log_audit(
+            self.request.user,
+            "user.delete",
+            resource_type="user",
+            resource_id=instance.pk,
+            summary=f"Deleted user {instance.username}",
+            metadata={"username": instance.username},
+        )
+        instance.delete()
