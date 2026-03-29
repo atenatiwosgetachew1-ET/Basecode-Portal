@@ -17,7 +17,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .audit_log import log_audit
-from .auth_utils import user_payload
+from .auth_utils import feature_enabled, user_payload
 from .models import PlatformSettings, Profile
 from .email_service import send_password_reset_email, send_verification_email
 from .verification_code import generate_code, store_code_on_profile
@@ -108,6 +108,12 @@ def _clear_failed_login_attempts(profile):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def login(request):
+    if not feature_enabled("email_password_login_enabled"):
+        return Response(
+            {"success": False, "message": "Email/password login is currently disabled."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
     username = (request.data.get("username") or "").strip()
     password = request.data.get("password")
 

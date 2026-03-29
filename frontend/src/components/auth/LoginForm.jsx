@@ -63,12 +63,6 @@ export default function LoginForm({ onSubmit, loading, flash }) {
         <Link to="/forgot-password">Forgot password?</Link>
       </p>
 
-      <div className="demo-box">
-        <p>
-          <strong>Demo Credentials:</strong>
-        </p>
-        <p>superuser / superadmin</p>
-      </div>
     </form>
   )
 }

@@ -22,7 +22,8 @@ export default function ActivityLogPage() {
   const [query, setQuery] = useState('')
 
   const canView =
-    currentUser?.role === 'superadmin' || currentUser?.role === 'admin'
+    currentUser?.feature_flags?.audit_log_enabled &&
+    currentUser?.permissions?.includes('audit.view')
 
   const load = useCallback(async () => {
     setLoading(true)

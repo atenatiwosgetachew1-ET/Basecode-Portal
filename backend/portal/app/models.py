@@ -73,8 +73,31 @@ def create_user_preferences(sender, instance, created, **kwargs):
 
 
 class PlatformSettings(models.Model):
+    DEFAULT_FEATURE_FLAGS = {
+        "registration_enabled": True,
+        "email_password_login_enabled": True,
+        "google_login_enabled": True,
+        "users_management_enabled": True,
+        "audit_log_enabled": True,
+    }
+    DEFAULT_ROLE_PERMISSIONS = {
+        Profile.ROLE_SUPERADMIN: [
+            "users.manage_all",
+            "audit.view",
+            "platform.manage",
+        ],
+        Profile.ROLE_ADMIN: [
+            "users.manage_limited",
+            "audit.view",
+        ],
+        Profile.ROLE_STAFF: [],
+        Profile.ROLE_CUSTOMER: [],
+    }
+
     login_max_failed_attempts = models.PositiveIntegerField(default=5)
     login_lockout_minutes = models.PositiveIntegerField(default=15)
+    feature_flags = models.JSONField(default=dict, blank=True)
+    role_permissions = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod
@@ -83,6 +106,17 @@ class PlatformSettings(models.Model):
 
     def save(self, *args, **kwargs):
         self.pk = 1
+        merged_flags = dict(self.DEFAULT_FEATURE_FLAGS)
+        merged_flags.update(self.feature_flags or {})
+        self.feature_flags = merged_flags
+
+        merged_permissions = {
+            role: list(perms)
+            for role, perms in self.DEFAULT_ROLE_PERMISSIONS.items()
+        }
+        for role, perms in (self.role_permissions or {}).items():
+            merged_permissions[role] = list(dict.fromkeys(perms or []))
+        self.role_permissions = merged_permissions
         super().save(*args, **kwargs)
 
     def __str__(self):

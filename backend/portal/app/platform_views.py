@@ -5,7 +5,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .auth_utils import can_manage_users, is_superadmin
+from .auth_utils import can_manage_platform, can_manage_users, can_view_audit_log
 from .models import AuditLog, Notification, PlatformSettings, UserPreferences
 from .serializers import (
     AuditLogSerializer,
@@ -18,7 +18,7 @@ from .serializers import (
 class IsManagerForAudit(BasePermission):
     def has_permission(self, request, view):
         u = request.user
-        return bool(u and u.is_authenticated and can_manage_users(u))
+        return bool(u and u.is_authenticated and can_view_audit_log(u))
 
 
 class AuditLogPagination(PageNumberPagination):
@@ -78,7 +78,7 @@ class UserPreferencesDetailView(APIView):
 class IsSuperadminOnly(BasePermission):
     def has_permission(self, request, view):
         u = request.user
-        return bool(u and u.is_authenticated and is_superadmin(u))
+        return bool(u and u.is_authenticated and can_manage_platform(u))
 
 
 class PlatformSettingsDetailView(APIView):

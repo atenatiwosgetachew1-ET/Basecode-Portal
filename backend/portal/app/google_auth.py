@@ -14,7 +14,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .audit_log import log_audit
-from .auth_utils import user_payload
+from .auth_utils import feature_enabled, user_payload
 from .models import Profile
 
 
@@ -57,6 +57,15 @@ def _unique_username(base: str) -> str:
 @authentication_classes([])
 @permission_classes([AllowAny])
 def login_with_google(request):
+    if not feature_enabled("google_login_enabled"):
+        return Response(
+            {
+                "success": False,
+                "message": "Google sign-in is currently disabled.",
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
     from google.auth.transport import requests as google_requests
     from google.oauth2 import id_token as google_id_token
 

@@ -96,8 +96,36 @@ class AuthFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_registration_can_be_disabled_via_platform_settings(self):
+        settings_obj = PlatformSettings.get_solo()
+        settings_obj.feature_flags["registration_enabled"] = False
+        settings_obj.save()
+
+        csrf_token = self._csrf_token()
+        response = self.csrf_client.post(
+            "/api/register/",
+            data=json.dumps(
+                {
+                    "username": "blocked-user",
+                    "email": "blocked@example.com",
+                    "password": "strong-pass-123",
+                    "password_confirm": "strong-pass-123",
+                }
+            ),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("disabled", response.json()["message"].lower())
+
     @override_settings(LOGIN_MAX_FAILED_ATTEMPTS=3, LOGIN_LOCKOUT_MINUTES=15)
     def test_login_locks_after_repeated_failures_and_sends_reset_email(self):
+        settings_obj = PlatformSettings.get_solo()
+        settings_obj.login_max_failed_attempts = 3
+        settings_obj.login_lockout_minutes = 15
+        settings_obj.save()
+
         user = User.objects.create_user(
             username="locked-user",
             email="locked@example.com",
@@ -143,6 +171,11 @@ class AuthFlowTests(TestCase):
 
     @override_settings(LOGIN_MAX_FAILED_ATTEMPTS=2, LOGIN_LOCKOUT_MINUTES=15)
     def test_unverified_user_lockout_resends_verification_email(self):
+        settings_obj = PlatformSettings.get_solo()
+        settings_obj.login_max_failed_attempts = 2
+        settings_obj.login_lockout_minutes = 15
+        settings_obj.save()
+
         user = User.objects.create_user(
             username="pending-user",
             email="pending@example.com",
@@ -173,6 +206,11 @@ class AuthFlowTests(TestCase):
 
     @override_settings(LOGIN_MAX_FAILED_ATTEMPTS=2, LOGIN_LOCKOUT_MINUTES=15)
     def test_lockout_expires_and_successful_login_clears_counter(self):
+        settings_obj = PlatformSettings.get_solo()
+        settings_obj.login_max_failed_attempts = 2
+        settings_obj.login_lockout_minutes = 15
+        settings_obj.save()
+
         user = User.objects.create_user(
             username="cooldown-user",
             email="cooldown@example.com",
@@ -331,3 +369,23 @@ class UserManagementPermissionTests(TestCase):
         settings_obj = PlatformSettings.get_solo()
         self.assertEqual(settings_obj.login_max_failed_attempts, 7)
         self.assertEqual(settings_obj.login_lockout_minutes, 20)
+
+    def test_dynamic_role_permissions_can_disable_admin_user_management(self):
+        admin_user = self._create_user("manager", Profile.ROLE_ADMIN)
+        settings_obj = PlatformSettings.get_solo()
+        settings_obj.role_permissions[Profile.ROLE_ADMIN] = ["audit.view"]
+        settings_obj.save()
+
+        self.client.force_authenticate(user=admin_user)
+        response = self.client.get("/api/users/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_dynamic_role_permissions_can_enable_staff_audit_access(self):
+        staff_user = self._create_user("auditor", Profile.ROLE_STAFF)
+        settings_obj = PlatformSettings.get_solo()
+        settings_obj.role_permissions[Profile.ROLE_STAFF] = ["audit.view"]
+        settings_obj.save()
+
+        self.client.force_authenticate(user=staff_user)
+        response = self.client.get("/api/audit-logs/")
+        self.assertEqual(response.status_code, 200)

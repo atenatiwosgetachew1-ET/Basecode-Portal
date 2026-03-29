@@ -208,10 +208,59 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
 
 
 class PlatformSettingsSerializer(serializers.ModelSerializer):
+    feature_flags = serializers.JSONField()
+    role_permissions = serializers.JSONField()
+
     class Meta:
         model = PlatformSettings
-        fields = ("login_max_failed_attempts", "login_lockout_minutes", "updated_at")
+        fields = (
+            "login_max_failed_attempts",
+            "login_lockout_minutes",
+            "feature_flags",
+            "role_permissions",
+            "updated_at",
+        )
         read_only_fields = ("updated_at",)
+
+    def validate_feature_flags(self, value):
+        allowed = set(PlatformSettings.DEFAULT_FEATURE_FLAGS.keys())
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Feature flags must be an object.")
+        cleaned = {}
+        for key, flag_value in value.items():
+            if key not in allowed:
+                raise serializers.ValidationError(f"Unknown feature flag: {key}")
+            cleaned[key] = bool(flag_value)
+        merged = dict(PlatformSettings.DEFAULT_FEATURE_FLAGS)
+        merged.update(cleaned)
+        return merged
+
+    def validate_role_permissions(self, value):
+        allowed_roles = {choice for choice, _ in Profile.ROLE_CHOICES}
+        allowed_permissions = {
+            "users.manage_all",
+            "users.manage_limited",
+            "audit.view",
+            "platform.manage",
+        }
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Role permissions must be an object.")
+        merged = {
+            role: list(perms)
+            for role, perms in PlatformSettings.DEFAULT_ROLE_PERMISSIONS.items()
+        }
+        for role, permissions in value.items():
+            if role not in allowed_roles:
+                raise serializers.ValidationError(f"Unknown role: {role}")
+            if not isinstance(permissions, list):
+                raise serializers.ValidationError(f"Permissions for {role} must be a list.")
+            invalid = [perm for perm in permissions if perm not in allowed_permissions]
+            if invalid:
+                raise serializers.ValidationError(
+                    f"Unknown permissions for {role}: {', '.join(invalid)}"
+                )
+            merged[role] = list(dict.fromkeys(permissions))
+        return merged
 
 
 class PublicRegisterSerializer(serializers.Serializer):

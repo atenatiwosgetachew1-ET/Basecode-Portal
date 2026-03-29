@@ -21,6 +21,7 @@ flowchart LR
   B2a --> B2b["bootstrap current user"]
   B2a --> B2c["login/logout"]
   B2a --> B2d["Google sign-in"]
+  B2a --> B2e["permissions + feature flags"]
 
   B3 --> B3a["DashboardPage"]
   B3 --> B3b["UsersManagementPage"]
@@ -38,13 +39,14 @@ flowchart LR
   B5 --> B5d["preferencesService"]
   B5 --> B5e["notificationsService"]
   B5 --> B5f["auditLogService"]
+  B5 --> B5g["platformSettingsService"]
 
   C --> C1["Auth APIs"]
   C --> C2["User APIs"]
   C --> C3["Platform APIs"]
   C --> C4["Models"]
   C --> C5["Support logic"]
-  C --> C6["RBAC"]
+  C --> C6["Dynamic access model"]
 
   C1 --> C1a["csrf"]
   C1 --> C1b["login/logout"]
@@ -52,6 +54,7 @@ flowchart LR
   C1 --> C1d["verify/resend email"]
   C1 --> C1e["password reset"]
   C1 --> C1f["Google auth"]
+  C1 --> C1g["temporary login lockout"]
 
   C2 --> C2a["/me"]
   C2 --> C2b["/users"]
@@ -60,12 +63,14 @@ flowchart LR
   C3 --> C3a["notifications"]
   C3 --> C3b["preferences"]
   C3 --> C3c["audit logs"]
+  C3 --> C3d["platform settings"]
 
   C4 --> C4a["User"]
   C4 --> C4b["Profile"]
   C4 --> C4c["UserPreferences"]
-  C4 --> C4d["Notification"]
-  C4 --> C4e["AuditLog"]
+  C4 --> C4d["PlatformSettings"]
+  C4 --> C4e["Notification"]
+  C4 --> C4f["AuditLog"]
 
   C5 --> C5a["serializers"]
   C5 --> C5b["auth_utils"]
@@ -73,10 +78,9 @@ flowchart LR
   C5 --> C5d["email_service"]
   C5 --> C5e["verification_code"]
 
-  C6 --> C6a["superadmin"]
-  C6 --> C6b["admin"]
-  C6 --> C6c["staff"]
-  C6 --> C6d["customer"]
+  C6 --> C6a["roles"]
+  C6 --> C6b["role permissions"]
+  C6 --> C6c["feature flags"]
 
   D --> D1["PostgreSQL"]
   D --> D2["SQLite tests"]

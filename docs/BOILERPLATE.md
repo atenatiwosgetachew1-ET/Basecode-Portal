@@ -9,7 +9,9 @@ A **Django REST API** + **React (Vite) SPA** with:
 - Session-based authentication using Django cookies and CSRF protection
 - Email/password registration, verification, login, logout, and password reset
 - Google sign-in with Google Identity Services
-- Role-based access control
+- Dynamic platform settings managed by superadmins
+- Feature flags for major product capabilities
+- Role-based access driven by configurable permission mappings
 - User administration, notifications, audit logging, and per-user preferences
 
 ## Tech stack
@@ -33,7 +35,7 @@ frontend/
   src/
     api/client.js            # fetch wrapper, CSRF bootstrap, 401 handling
     context/AuthContext.jsx  # auth bootstrap and session state
-    services/                # auth, users, notifications, preferences, audit APIs
+    services/                # auth, users, preferences, audit, platform settings APIs
     routes/ProtectedRoute.jsx
     pages/                   # login, register, dashboard, settings, activity, etc.
     components/              # layout, notifications, auth UI
@@ -55,12 +57,14 @@ flowchart LR
   subgraph server ["Django + DRF"]
     VIEWS["API views"]
     SESSION["SessionAuthentication"]
+    SETTINGS["PlatformSettings"]
     DB[("PostgreSQL")]
   end
   UI --> AUTH
   AUTH --> API
   API -->|"JSON + cookies + X-CSRFToken"| VIEWS
   VIEWS --> SESSION
+  VIEWS --> SETTINGS
   VIEWS --> DB
 ```
 
@@ -100,6 +104,8 @@ sequenceDiagram
 3. `POST /api/verify-email/` activates the account after code validation
 4. `POST /api/resend-verification/` reissues a code if needed
 
+Registration can be disabled with the `registration_enabled` feature flag.
+
 ### Password reset
 
 1. `POST /api/password-reset/` emails a reset link
@@ -109,40 +115,51 @@ sequenceDiagram
 
 The frontend obtains a Google ID token and posts it to `/api/auth/google/`. The backend verifies the token against `GOOGLE_CLIENT_ID`, links or creates the local user, and starts a Django session.
 
+Google sign-in can be disabled with the `google_login_enabled` feature flag.
+
 Important: runtime only needs the OAuth **client ID** in env. Downloaded Google OAuth client-secret JSON files should stay out of source control.
 
-## Role model
+## Access model
 
-Roles live on `Profile.role`:
+Roles still live on `Profile.role`:
 
 - `superadmin`
 - `admin`
 - `staff`
 - `customer`
 
-Manager permissions are enforced in [user_views.py](D:/Projects/Basecode%20(Boilerplate)/backend/portal/app/user_views.py) and serializers, not only through Django’s built-in staff flags.
+But effective access is now driven by **dynamic role permissions** stored in `PlatformSettings.role_permissions`.
 
-```mermaid
-flowchart TB
-  SA["superadmin"]
-  AD["admin"]
-  ST["staff"]
-  CU["customer"]
-  SA -->|"manage all accounts"| AD
-  SA -->|"manage"| ST
-  SA -->|"manage"| CU
-  AD -->|"manage"| ST
-  AD -->|"manage"| CU
-```
+Default permissions:
+
+- `superadmin`: `users.manage_all`, `audit.view`, `platform.manage`
+- `admin`: `users.manage_limited`, `audit.view`
+- `staff`: none by default
+- `customer`: none by default
+
+This means the boilerplate can evolve beyond fixed role behavior without changing code for every access rule.
 
 ## Main models
 
-- `Profile`: role, phone, email verification state, Google account link
+- `Profile`: role, phone, email verification state, Google account link, login lockout counters
 - `UserPreferences`: theme, timezone, language, email notification preference
+- `PlatformSettings`: lockout policy, feature flags, role-permission mapping
 - `Notification`: in-app user notifications
 - `AuditLog`: actor, action, resource metadata, timestamp
 
 See [models.py](D:/Projects/Basecode%20(Boilerplate)/backend/portal/app/models.py).
+
+## Feature flags
+
+The boilerplate currently supports these database-backed feature flags:
+
+- `registration_enabled`
+- `email_password_login_enabled`
+- `google_login_enabled`
+- `users_management_enabled`
+- `audit_log_enabled`
+
+These are managed by superadmins in the Settings UI and are included in the authenticated user payload so the frontend can react to them immediately.
 
 ## Frontend routing
 
@@ -155,9 +172,9 @@ flowchart TD
   L --> D
   R --> V
   D --> DH["Dashboard home"]
-  D --> DU["Users management"]
+  D --> DU["Users management (feature + permission gated)"]
   D --> DS["Settings"]
-  D --> DA["Activity log"]
+  D --> DA["Activity log (feature + permission gated)"]
 ```
 
 `ProtectedRoute` blocks unauthenticated access to the dashboard and redirects users to `/login`.
@@ -176,13 +193,14 @@ flowchart TD
 | POST | `/api/password-reset/` | Request reset email |
 | POST | `/api/password-reset/confirm/` | Confirm password reset |
 | GET/PATCH | `/api/me/` | Read or update own profile |
-| GET/POST | `/api/users/` | Paginated, filterable user list or create users for managers |
+| GET/POST | `/api/users/` | Paginated, filterable user list or create users when permitted |
 | GET/PATCH/DELETE | `/api/users/<id>/` | Manage one user |
 | GET | `/api/notifications/` | Current user notifications |
 | PATCH | `/api/notifications/<id>/` | Mark one notification read |
 | POST | `/api/notifications/mark-all-read/` | Mark all notifications read |
 | GET/PATCH | `/api/preferences/me/` | Current user preferences |
-| GET | `/api/audit-logs/` | Paginated, searchable manager audit trail |
+| GET/PATCH | `/api/platform-settings/` | Superadmin-managed platform controls |
+| GET | `/api/audit-logs/` | Paginated, searchable audit trail when permitted |
 
 ## Configuration
 
@@ -196,7 +214,7 @@ Key defaults and expectations:
 - `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS` are env-driven
 - Production should set HTTPS cookie flags and HSTS values appropriately
 - `FRONTEND_URL` powers email links
-- `LOGIN_MAX_FAILED_ATTEMPTS` and `LOGIN_LOCKOUT_MINUTES` control temporary login lockouts
+- `LOGIN_MAX_FAILED_ATTEMPTS` and `LOGIN_LOCKOUT_MINUTES` provide fallback lockout defaults before platform settings are changed in-app
 - `GOOGLE_CLIENT_ID` must match the frontend `VITE_GOOGLE_CLIENT_ID`
 
 Frontend configuration lives in [frontend/.env.example](D:/Projects/Basecode%20(Boilerplate)/frontend/.env.example).
@@ -205,11 +223,11 @@ Frontend configuration lives in [frontend/.env.example](D:/Projects/Basecode%20(
 
 When turning this into a new product:
 
-1. Rename UI branding and project-specific copy
+1. Rename the UI branding and project-specific copy
 2. Create a new PostgreSQL database and env file
 3. Replace demo email sender values
-4. Set a new Google OAuth web client ID if using Google sign-in
-5. Review role names and access rules before shipping
+4. Review feature flags and default role-permission mappings
+5. Set a new Google OAuth web client ID if using Google sign-in
 6. Add product-specific tests before feature work diverges too far
 
 ---

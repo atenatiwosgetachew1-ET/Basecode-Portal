@@ -36,7 +36,12 @@ function formatDate(iso) {
 }
 
 function canManageUsers(user) {
-  return user?.role === 'superadmin' || user?.role === 'admin'
+  const permissions = user?.permissions || []
+  const features = user?.feature_flags || {}
+  return (
+    features.users_management_enabled &&
+    (permissions.includes('users.manage_all') || permissions.includes('users.manage_limited'))
+  )
 }
 
 export default function UsersManagementPage() {

@@ -31,3 +31,22 @@ export async function patchPlatformSettings(payload) {
   }
   return data
 }
+
+export function defaultFeatureFlags() {
+  return {
+    registration_enabled: true,
+    email_password_login_enabled: true,
+    google_login_enabled: true,
+    users_management_enabled: true,
+    audit_log_enabled: true
+  }
+}
+
+export function defaultRolePermissions() {
+  return {
+    superadmin: ['users.manage_all', 'audit.view', 'platform.manage'],
+    admin: ['users.manage_limited', 'audit.view'],
+    staff: [],
+    customer: []
+  }
+}

@@ -5,7 +5,11 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from .audit_log import log_audit
-from .auth_utils import can_manage_users, get_profile_role, is_superadmin
+from .auth_utils import (
+    can_manage_all_users,
+    can_manage_users,
+    get_profile_role,
+)
 from .models import Notification, Profile
 from .platform_views import UserPagination
 from .serializers import UserCreateSerializer, UserListSerializer, UserUpdateSerializer
@@ -30,9 +34,9 @@ class UserListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = super().get_queryset()
         role = get_profile_role(self.request.user)
-        if role == Profile.ROLE_SUPERADMIN:
+        if can_manage_all_users(self.request.user):
             queryset = qs
-        elif role == Profile.ROLE_ADMIN:
+        elif can_manage_users(self.request.user):
             queryset = qs.filter(
                 profile__role__in=[Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER]
             )
@@ -93,10 +97,9 @@ class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        role = get_profile_role(self.request.user)
-        if role == Profile.ROLE_SUPERADMIN:
+        if can_manage_all_users(self.request.user):
             return qs
-        if role == Profile.ROLE_ADMIN:
+        if can_manage_users(self.request.user):
             return qs.filter(profile__role__in=[Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER])
         return qs.none()
 
@@ -118,7 +121,7 @@ class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
                 {"detail": "You cannot delete your own account."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not is_superadmin(request.user):
+        if not can_manage_all_users(request.user):
             target_role = get_profile_role(instance)
             if target_role not in (Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER):
                 return Response(

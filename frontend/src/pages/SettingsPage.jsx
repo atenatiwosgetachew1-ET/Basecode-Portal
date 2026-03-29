@@ -34,6 +34,12 @@ export default function SettingsPage() {
   const [platformSaved, setPlatformSaved] = useState(false)
   const [platformSettings, setPlatformSettings] = useState(null)
   const isSuperadmin = user?.role === 'superadmin'
+  const permissionOptions = [
+    { value: 'users.manage_all', label: 'Manage all users' },
+    { value: 'users.manage_limited', label: 'Manage staff/customers' },
+    { value: 'audit.view', label: 'View audit log' },
+    { value: 'platform.manage', label: 'Manage platform settings' }
+  ]
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,6 +88,38 @@ export default function SettingsPage() {
 
   const handlePlatformChange = (field, value) => {
     setPlatformSettings((current) => (current ? { ...current, [field]: value } : current))
+    setPlatformSaved(false)
+  }
+
+  const handleFeatureFlagChange = (flag, checked) => {
+    setPlatformSettings((current) =>
+      current
+        ? {
+            ...current,
+            feature_flags: {
+              ...current.feature_flags,
+              [flag]: checked
+            }
+          }
+        : current
+    )
+    setPlatformSaved(false)
+  }
+
+  const handleRolePermissionChange = (role, permission, checked) => {
+    setPlatformSettings((current) => {
+      if (!current) return current
+      const next = new Set(current.role_permissions?.[role] || [])
+      if (checked) next.add(permission)
+      else next.delete(permission)
+      return {
+        ...current,
+        role_permissions: {
+          ...current.role_permissions,
+          [role]: [...next]
+        }
+      }
+    })
     setPlatformSaved(false)
   }
 
@@ -138,7 +176,9 @@ export default function SettingsPage() {
     try {
       const updated = await platformSettingsService.patchPlatformSettings({
         login_max_failed_attempts: Number(platformSettings.login_max_failed_attempts),
-        login_lockout_minutes: Number(platformSettings.login_lockout_minutes)
+        login_lockout_minutes: Number(platformSettings.login_lockout_minutes),
+        feature_flags: platformSettings.feature_flags,
+        role_permissions: platformSettings.role_permissions
       })
       setPlatformSettings(updated)
       setPlatformSaved(true)
@@ -304,6 +344,57 @@ export default function SettingsPage() {
             </label>
             <button type="submit" disabled={platformSaving}>
               {platformSaving ? 'Savingâ€¦' : 'Save security policy'}
+            </button>
+          </form>
+
+          <h2 className="settings-section-title">Feature flags</h2>
+          <p className="muted-text settings-section-hint">
+            Toggle major product capabilities without redeploying.
+          </p>
+          <form className="settings-form" onSubmit={handlePlatformSubmit}>
+            {Object.entries(platformSettings.feature_flags || {}).map(([flag, enabled]) => (
+              <label key={flag} className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={Boolean(enabled)}
+                  onChange={(e) => handleFeatureFlagChange(flag, e.target.checked)}
+                />
+                {flag.replaceAll('_', ' ')}
+              </label>
+            ))}
+            <button type="submit" disabled={platformSaving}>
+              {platformSaving ? 'Savingâ€¦' : 'Save feature flags'}
+            </button>
+          </form>
+
+          <h2 className="settings-section-title">Role permissions</h2>
+          <p className="muted-text settings-section-hint">
+            Adjust capabilities per role without changing code.
+          </p>
+          <form className="settings-form" onSubmit={handlePlatformSubmit}>
+            {Object.keys(platformSettings.role_permissions || {}).map((role) => (
+              <div key={role}>
+                <strong style={{ display: 'block', marginBottom: 8, textTransform: 'capitalize' }}>
+                  {role}
+                </strong>
+                {permissionOptions.map((option) => (
+                  <label key={`${role}-${option.value}`} className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={(platformSettings.role_permissions?.[role] || []).includes(
+                        option.value
+                      )}
+                      onChange={(e) =>
+                        handleRolePermissionChange(role, option.value, e.target.checked)
+                      }
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            ))}
+            <button type="submit" disabled={platformSaving}>
+              {platformSaving ? 'Savingâ€¦' : 'Save role permissions'}
             </button>
           </form>
         </>

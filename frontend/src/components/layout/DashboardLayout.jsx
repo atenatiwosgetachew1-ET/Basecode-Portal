@@ -6,8 +6,13 @@ export default function DashboardLayout() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
+  const permissions = user?.permissions || []
+  const features = user?.feature_flags || {}
   const canManageUsers =
-    user?.role === 'superadmin' || user?.role === 'admin'
+    features.users_management_enabled &&
+    (permissions.includes('users.manage_all') || permissions.includes('users.manage_limited'))
+  const canViewAudit =
+    features.audit_log_enabled && permissions.includes('audit.view')
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard', end: true },
@@ -15,7 +20,7 @@ export default function DashboardLayout() {
       ? [{ to: '/dashboard/users', label: 'Users management', end: false }]
       : []),
     { to: '/dashboard/settings', label: 'Settings', end: false },
-    ...(canManageUsers
+    ...(canViewAudit
       ? [{ to: '/dashboard/activity', label: 'Activity log', end: false }]
       : [])
   ]

@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .audit_log import log_audit
+from .auth_utils import feature_enabled
 from .email_service import send_password_reset_email, send_verification_email
 from .models import Profile
 from .serializers import (
@@ -44,6 +45,15 @@ def csrf_token_view(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def register(request):
+    if not feature_enabled("registration_enabled"):
+        return Response(
+            {
+                "success": False,
+                "message": "New registrations are currently disabled.",
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
     serializer = PublicRegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     user = serializer.save()
