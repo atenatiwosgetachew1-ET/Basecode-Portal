@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as authService from '../services/authService'
+import * as platformSettingsService from '../services/platformSettingsService'
 import * as preferencesService from '../services/preferencesService'
 import { useAuth } from '../context/AuthContext'
 import { applyTheme } from '../utils/theme'
@@ -24,24 +25,36 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
+  const [platformSaving, setPlatformSaving] = useState(false)
   const [error, setError] = useState('')
   const [profileError, setProfileError] = useState('')
+  const [platformError, setPlatformError] = useState('')
   const [saved, setSaved] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
+  const [platformSaved, setPlatformSaved] = useState(false)
+  const [platformSettings, setPlatformSettings] = useState(null)
+  const isSuperadmin = user?.role === 'superadmin'
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
+    setPlatformError('')
     try {
-      const data = await preferencesService.fetchPreferences()
-      setPrefs(data)
-      applyTheme(data.theme)
+      const [prefsData, platformData] = await Promise.all([
+        preferencesService.fetchPreferences(),
+        isSuperadmin
+          ? platformSettingsService.fetchPlatformSettings()
+          : Promise.resolve(null)
+      ])
+      setPrefs(prefsData)
+      setPlatformSettings(platformData)
+      applyTheme(prefsData.theme)
     } catch (e) {
       setError(e.message || 'Could not load settings')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [isSuperadmin])
 
   useEffect(() => {
     load()
@@ -65,6 +78,11 @@ export default function SettingsPage() {
   const handleProfileChange = (field, value) => {
     setProfile((p) => ({ ...p, [field]: value }))
     setProfileSaved(false)
+  }
+
+  const handlePlatformChange = (field, value) => {
+    setPlatformSettings((current) => (current ? { ...current, [field]: value } : current))
+    setPlatformSaved(false)
   }
 
   const handleProfileSubmit = async (e) => {
@@ -108,6 +126,26 @@ export default function SettingsPage() {
       setError(err.message || 'Could not save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handlePlatformSubmit = async (e) => {
+    e.preventDefault()
+    if (!platformSettings) return
+    setPlatformSaving(true)
+    setPlatformError('')
+    setPlatformSaved(false)
+    try {
+      const updated = await platformSettingsService.patchPlatformSettings({
+        login_max_failed_attempts: Number(platformSettings.login_max_failed_attempts),
+        login_lockout_minutes: Number(platformSettings.login_lockout_minutes)
+      })
+      setPlatformSettings(updated)
+      setPlatformSaved(true)
+    } catch (err) {
+      setPlatformError(err.message || 'Could not save platform settings')
+    } finally {
+      setPlatformSaving(false)
     }
   }
 
@@ -229,6 +267,47 @@ export default function SettingsPage() {
           {saving ? 'Saving…' : 'Save preferences'}
         </button>
       </form>
+
+      {isSuperadmin && platformSettings && (
+        <>
+          <h2 className="settings-section-title">Security policy</h2>
+          <p className="muted-text settings-section-hint">
+            Control how many wrong login attempts are allowed before the app temporarily locks
+            sign-in and sends recovery email help.
+          </p>
+          {platformError && <p className="error-message">{platformError}</p>}
+          {platformSaved && <p className="settings-saved">Security policy saved.</p>}
+          <form className="settings-form" onSubmit={handlePlatformSubmit}>
+            <label>
+              Max failed attempts
+              <input
+                type="number"
+                min="1"
+                value={platformSettings.login_max_failed_attempts}
+                onChange={(e) =>
+                  handlePlatformChange('login_max_failed_attempts', e.target.value)
+                }
+                required
+              />
+            </label>
+            <label>
+              Lockout minutes
+              <input
+                type="number"
+                min="1"
+                value={platformSettings.login_lockout_minutes}
+                onChange={(e) =>
+                  handlePlatformChange('login_lockout_minutes', e.target.value)
+                }
+                required
+              />
+            </label>
+            <button type="submit" disabled={platformSaving}>
+              {platformSaving ? 'Savingâ€¦' : 'Save security policy'}
+            </button>
+          </form>
+        </>
+      )}
     </section>
   )
 }

@@ -17,6 +17,7 @@ from .platform_views import (
     MarkAllNotificationsReadView,
     NotificationDetailView,
     NotificationListView,
+    PlatformSettingsDetailView,
     UserPreferencesDetailView,
 )
 from .user_views import UserListCreateView, UserRetrieveUpdateDestroyView
@@ -57,6 +58,11 @@ urlpatterns = [
         "preferences/me/",
         UserPreferencesDetailView.as_view(),
         name="preferences-me",
+    ),
+    path(
+        "platform-settings/",
+        PlatformSettingsDetailView.as_view(),
+        name="platform-settings",
     ),
     path("audit-logs/", AuditLogListView.as_view(), name="audit-logs-list"),
 ]

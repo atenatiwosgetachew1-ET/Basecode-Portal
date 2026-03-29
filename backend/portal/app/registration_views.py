@@ -1,9 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.middleware.csrf import get_token
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
-from django.middleware.csrf import get_token
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 from rest_framework import status
 from rest_framework.decorators import (
     api_view,
@@ -39,7 +39,7 @@ def csrf_token_view(request):
     return Response({"csrfToken": get_token(request)})
 
 
-@csrf_exempt
+@csrf_protect
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -74,7 +74,7 @@ def register(request):
     )
 
 
-@csrf_exempt
+@csrf_protect
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -129,7 +129,7 @@ def verify_email(request):
     )
 
 
-@csrf_exempt
+@csrf_protect
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -190,7 +190,7 @@ def resend_verification(request):
     )
 
 
-@csrf_exempt
+@csrf_protect
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -237,7 +237,7 @@ def password_reset_request(request):
     )
 
 
-@csrf_exempt
+@csrf_protect
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -277,3 +277,10 @@ def password_reset_confirm(request):
         metadata={"username": user.username},
     )
     return Response({"success": True, "message": "Your password has been updated. You can sign in now."})
+
+
+register.csrf_exempt = False
+verify_email.csrf_exempt = False
+resend_verification.csrf_exempt = False
+password_reset_request.csrf_exempt = False
+password_reset_confirm.csrf_exempt = False

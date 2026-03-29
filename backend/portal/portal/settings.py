@@ -62,7 +62,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'rest_framework.authtoken',
     # your apps
     'app',
 ]
@@ -202,6 +201,8 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", False)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+LOGIN_MAX_FAILED_ATTEMPTS = int(os.getenv("LOGIN_MAX_FAILED_ATTEMPTS", "5") or "5")
+LOGIN_LOCKOUT_MINUTES = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15") or "15")
 
 
 def _env_strip(key: str, default: str = "") -> str:
@@ -248,7 +249,6 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.TokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",

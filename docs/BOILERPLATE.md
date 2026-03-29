@@ -38,7 +38,7 @@ frontend/
     pages/                   # login, register, dashboard, settings, activity, etc.
     components/              # layout, notifications, auth UI
 docs/
-  BOILERPLATE.md             # this document
+  Boilerplate.md             # this document
 ```
 
 All backend routes are mounted under **`/api/`** in [portal/urls.py](D:/Projects/Basecode%20(Boilerplate)/backend/portal/portal/urls.py).
@@ -74,6 +74,8 @@ The SPA does not store bearer tokens. Instead, it:
 2. Posts credentials to `/api/login/`
 3. Receives a user payload while Django sets the authenticated session cookie
 4. Calls `/api/me/` on bootstrap to restore the session after refresh
+
+If a user repeatedly enters the wrong password, the backend temporarily locks login for that account and emails recovery help. Verified accounts receive password-reset instructions; unverified accounts receive a fresh email verification code.
 
 ```mermaid
 sequenceDiagram
@@ -174,13 +176,13 @@ flowchart TD
 | POST | `/api/password-reset/` | Request reset email |
 | POST | `/api/password-reset/confirm/` | Confirm password reset |
 | GET/PATCH | `/api/me/` | Read or update own profile |
-| GET/POST | `/api/users/` | List or create users for managers |
+| GET/POST | `/api/users/` | Paginated, filterable user list or create users for managers |
 | GET/PATCH/DELETE | `/api/users/<id>/` | Manage one user |
 | GET | `/api/notifications/` | Current user notifications |
 | PATCH | `/api/notifications/<id>/` | Mark one notification read |
 | POST | `/api/notifications/mark-all-read/` | Mark all notifications read |
 | GET/PATCH | `/api/preferences/me/` | Current user preferences |
-| GET | `/api/audit-logs/` | Paginated manager audit trail |
+| GET | `/api/audit-logs/` | Paginated, searchable manager audit trail |
 
 ## Configuration
 
@@ -194,6 +196,7 @@ Key defaults and expectations:
 - `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS` are env-driven
 - Production should set HTTPS cookie flags and HSTS values appropriately
 - `FRONTEND_URL` powers email links
+- `LOGIN_MAX_FAILED_ATTEMPTS` and `LOGIN_LOCKOUT_MINUTES` control temporary login lockouts
 - `GOOGLE_CLIENT_ID` must match the frontend `VITE_GOOGLE_CLIENT_ID`
 
 Frontend configuration lives in [frontend/.env.example](D:/Projects/Basecode%20(Boilerplate)/frontend/.env.example).

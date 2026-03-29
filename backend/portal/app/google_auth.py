@@ -3,7 +3,7 @@ import re
 from django.conf import settings
 from django.contrib.auth import login as django_login
 from django.contrib.auth.models import User
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 from rest_framework import status
 from rest_framework.decorators import (
     api_view,
@@ -52,7 +52,7 @@ def _unique_username(base: str) -> str:
     return username
 
 
-@csrf_exempt
+@csrf_protect
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -174,3 +174,6 @@ def login_with_google(request):
             "user": user_payload(user),
         }
     )
+
+
+login_with_google.csrf_exempt = False

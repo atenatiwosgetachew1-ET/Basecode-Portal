@@ -41,26 +41,34 @@ function canManageUsers(user) {
 
 export default function UsersManagementPage() {
   const { user: currentUser } = useAuth()
-  const [users, setUsers] = useState([])
+  const [usersData, setUsersData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [form, setForm] = useState(emptyForm)
   const [creating, setCreating] = useState(false)
   const [rowBusy, setRowBusy] = useState({})
+  const [page, setPage] = useState(1)
+  const [searchInput, setSearchInput] = useState('')
+  const [filters, setFilters] = useState({ q: '', role: '', isActive: '' })
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const data = await usersService.fetchUsers()
-      setUsers(Array.isArray(data) ? data : [])
+      const data = await usersService.fetchUsers({
+        page,
+        q: filters.q,
+        role: filters.role,
+        isActive: filters.isActive
+      })
+      setUsersData(data)
     } catch (e) {
       setError(e.message || 'Failed to load users')
-      setUsers([])
+      setUsersData(null)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filters, page])
 
   useEffect(() => {
     if (canManageUsers(currentUser)) {
@@ -106,8 +114,13 @@ export default function UsersManagementPage() {
     setBusy(row.id, 'role', true)
     try {
       await usersService.patchUser(row.id, { role: newRole })
-      setUsers((prev) =>
-        prev.map((u) => (u.id === row.id ? { ...u, role: newRole } : u))
+      setUsersData((prev) =>
+        prev
+          ? {
+              ...prev,
+              results: prev.results.map((u) => (u.id === row.id ? { ...u, role: newRole } : u))
+            }
+          : prev
       )
     } catch (err) {
       setError(err.message || 'Could not update role')
@@ -120,8 +133,15 @@ export default function UsersManagementPage() {
     setBusy(row.id, 'active', true)
     try {
       await usersService.patchUser(row.id, { is_active: isActive })
-      setUsers((prev) =>
-        prev.map((u) => (u.id === row.id ? { ...u, is_active: isActive } : u))
+      setUsersData((prev) =>
+        prev
+          ? {
+              ...prev,
+              results: prev.results.map((u) =>
+                u.id === row.id ? { ...u, is_active: isActive } : u
+              )
+            }
+          : prev
       )
     } catch (err) {
       setError(err.message || 'Could not update status')
@@ -141,7 +161,15 @@ export default function UsersManagementPage() {
     setBusy(row.id, 'delete', true)
     try {
       await usersService.deleteUser(row.id)
-      setUsers((prev) => prev.filter((u) => u.id !== row.id))
+      setUsersData((prev) =>
+        prev
+          ? {
+              ...prev,
+              count: Math.max(0, prev.count - 1),
+              results: prev.results.filter((u) => u.id !== row.id)
+            }
+          : prev
+      )
     } catch (err) {
       setError(err.message || 'Could not delete user')
     } finally {
@@ -154,6 +182,16 @@ export default function UsersManagementPage() {
   }
 
   const roleSelectOptions = rolesForManager(currentUser)
+  const users = usersData?.results ?? []
+  const total = usersData?.count ?? users.length
+  const hasNext = Boolean(usersData?.next)
+  const hasPrev = Boolean(usersData?.previous)
+
+  const handleFilterSubmit = (e) => {
+    e.preventDefault()
+    setPage(1)
+    setFilters((prev) => ({ ...prev, q: searchInput.trim() }))
+  }
 
   return (
     <section className="dashboard-panel users-management">
@@ -174,6 +212,55 @@ export default function UsersManagementPage() {
           Refresh
         </button>
       </div>
+
+      <form
+        className="form-grid"
+        onSubmit={handleFilterSubmit}
+        style={{ marginBottom: 16, alignItems: 'end' }}
+      >
+        <label>
+          Search
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Username, email, name, or phone"
+          />
+        </label>
+        <label>
+          Role
+          <select
+            value={filters.role}
+            onChange={(e) => {
+              setPage(1)
+              setFilters((prev) => ({ ...prev, role: e.target.value }))
+            }}
+          >
+            <option value="">All roles</option>
+            {roleSelectOptions.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select
+            value={filters.isActive}
+            onChange={(e) => {
+              setPage(1)
+              setFilters((prev) => ({ ...prev, isActive: e.target.value }))
+            }}
+          >
+            <option value="">All statuses</option>
+            <option value="true">Active</option>
+            <option value="false">Suspended</option>
+          </select>
+        </label>
+        <button type="submit" className="btn-secondary">
+          Apply filters
+        </button>
+      </form>
 
       {error && (
         <p className="error-message" style={{ marginBottom: 16 }}>
@@ -264,6 +351,11 @@ export default function UsersManagementPage() {
 
         <div className="users-table-wrap">
           <h2>All users</h2>
+          {!loading && (
+            <p className="muted-text" style={{ marginBottom: 12 }}>
+              Showing {users.length} of {total} users.
+            </p>
+          )}
           {loading ? (
             <p className="muted-text">Loading users…</p>
           ) : users.length === 0 ? (
@@ -344,6 +436,27 @@ export default function UsersManagementPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {!loading && users.length > 0 && (
+            <div className="activity-log-pagination">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!hasPrev}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              <span className="muted-text">Page {page}</span>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!hasNext}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
             </div>
           )}
         </div>

@@ -28,6 +28,8 @@ class Profile(models.Model):
         unique=True,
         help_text="Google account subject (sub) when linked",
     )
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    login_locked_until = models.DateTimeField(null=True, blank=True)
     email_verification_code_hash = models.CharField(max_length=64, blank=True, default="")
     email_verification_code_expires = models.DateTimeField(null=True, blank=True)
 
@@ -68,6 +70,23 @@ class UserPreferences(models.Model):
 def create_user_preferences(sender, instance, created, **kwargs):
     if created:
         UserPreferences.objects.get_or_create(user=instance)
+
+
+class PlatformSettings(models.Model):
+    login_max_failed_attempts = models.PositiveIntegerField(default=5)
+    login_lockout_minutes = models.PositiveIntegerField(default=15)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get_solo(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "Platform settings"
 
 
 class Notification(models.Model):

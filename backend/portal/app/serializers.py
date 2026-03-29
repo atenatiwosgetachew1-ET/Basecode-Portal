@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .auth_utils import get_profile_role, is_admin, is_superadmin
-from .models import AuditLog, Notification, Profile, UserPreferences
+from .models import AuditLog, Notification, PlatformSettings, Profile, UserPreferences
 
 
 class UserListSerializer(serializers.ModelSerializer):
@@ -205,6 +205,13 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
         model = UserPreferences
         fields = ("id", "theme", "timezone", "language", "email_notifications")
         read_only_fields = ("id",)
+
+
+class PlatformSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformSettings
+        fields = ("login_max_failed_attempts", "login_lockout_minutes", "updated_at")
+        read_only_fields = ("updated_at",)
 
 
 class PublicRegisterSerializer(serializers.Serializer):

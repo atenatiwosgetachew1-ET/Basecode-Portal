@@ -35,6 +35,7 @@ Production-minded boilerplate for a Django + React app with:
 
 - Local development defaults to `DEBUG=true`
 - Production should set `DEBUG=false`, real `ALLOWED_HOSTS`, and HTTPS cookie settings
+- Repeated wrong-password attempts are rate-limited by `LOGIN_MAX_FAILED_ATTEMPTS` and `LOGIN_LOCKOUT_MINUTES`
 - Google login needs only the `GOOGLE_CLIENT_ID` value in env; do not commit downloaded OAuth client-secret JSON files
 - The test suite defaults to SQLite so it can run without a local PostgreSQL instance
 
@@ -42,4 +43,4 @@ Production-minded boilerplate for a Django + React app with:
 
 Architecture, module map, API surface, and workflows:
 
-[docs/BOILERPLATE.md](D:/Projects/Basecode%20(Boilerplate)/docs/BOILERPLATE.md)
+[docs/Boilerplate.md](D:/Projects/Basecode%20(Boilerplate)/docs/Boilerplate.md)

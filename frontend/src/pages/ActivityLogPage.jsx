@@ -18,6 +18,8 @@ export default function ActivityLogPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [query, setQuery] = useState('')
 
   const canView =
     currentUser?.role === 'superadmin' || currentUser?.role === 'admin'
@@ -26,7 +28,7 @@ export default function ActivityLogPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await auditLogService.fetchAuditLogs(page)
+      const res = await auditLogService.fetchAuditLogs({ page, q: query })
       setData(res)
     } catch (e) {
       setError(e.message || 'Failed to load activity log')
@@ -34,12 +36,18 @@ export default function ActivityLogPage() {
     } finally {
       setLoading(false)
     }
-  }, [page])
+  }, [page, query])
 
   useEffect(() => {
     if (canView) load()
     else setLoading(false)
   }, [canView, load])
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault()
+    setPage(1)
+    setQuery(searchInput.trim())
+  }
 
   if (!canView) {
     return <Navigate to="/dashboard" replace />
@@ -69,6 +77,24 @@ export default function ActivityLogPage() {
           Refresh
         </button>
       </div>
+
+      <form
+        className="form-grid"
+        onSubmit={handleSearchSubmit}
+        style={{ marginBottom: 16, alignItems: 'end' }}
+      >
+        <label>
+          Search
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Action, actor, resource, or summary"
+          />
+        </label>
+        <button type="submit" className="btn-secondary">
+          Apply search
+        </button>
+      </form>
 
       {error && <p className="error-message">{error}</p>}
 

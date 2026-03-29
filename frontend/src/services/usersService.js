@@ -1,7 +1,13 @@
 import { apiFetch } from '../api/client'
 
-export async function fetchUsers() {
-  const response = await apiFetch('/api/users/')
+export async function fetchUsers({ page = 1, q = '', role = '', isActive = '' } = {}) {
+  const params = new URLSearchParams()
+  params.set('page', String(page))
+  if (q.trim()) params.set('q', q.trim())
+  if (role) params.set('role', role)
+  if (isActive) params.set('is_active', isActive)
+
+  const response = await apiFetch(`/api/users/?${params.toString()}`)
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
     throw new Error(err.detail || err.message || 'Failed to load users')

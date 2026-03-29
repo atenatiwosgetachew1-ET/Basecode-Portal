@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
@@ -6,6 +7,7 @@ from rest_framework.response import Response
 from .audit_log import log_audit
 from .auth_utils import can_manage_users, get_profile_role, is_superadmin
 from .models import Notification, Profile
+from .platform_views import UserPagination
 from .serializers import UserCreateSerializer, UserListSerializer, UserUpdateSerializer
 
 
@@ -17,6 +19,7 @@ class IsSuperadminOrAdmin(BasePermission):
 
 class UserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsSuperadminOrAdmin]
+    pagination_class = UserPagination
     queryset = User.objects.all().select_related("profile").order_by("id")
 
     def get_serializer_class(self):
@@ -28,10 +31,34 @@ class UserListCreateView(generics.ListCreateAPIView):
         qs = super().get_queryset()
         role = get_profile_role(self.request.user)
         if role == Profile.ROLE_SUPERADMIN:
-            return qs
-        if role == Profile.ROLE_ADMIN:
-            return qs.filter(profile__role__in=[Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER])
-        return qs.none()
+            queryset = qs
+        elif role == Profile.ROLE_ADMIN:
+            queryset = qs.filter(
+                profile__role__in=[Profile.ROLE_STAFF, Profile.ROLE_CUSTOMER]
+            )
+        else:
+            return qs.none()
+
+        search = (self.request.query_params.get("q") or "").strip()
+        role_filter = (self.request.query_params.get("role") or "").strip()
+        is_active = (self.request.query_params.get("is_active") or "").strip().lower()
+
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(profile__phone__icontains=search)
+            )
+
+        if role_filter in {choice for choice, _ in Profile.ROLE_CHOICES}:
+            queryset = queryset.filter(profile__role=role_filter)
+
+        if is_active in {"true", "false"}:
+            queryset = queryset.filter(is_active=(is_active == "true"))
+
+        return queryset
 
     def perform_create(self, serializer):
         user = serializer.save()
@@ -47,7 +74,7 @@ class UserListCreateView(generics.ListCreateAPIView):
             user=user,
             title="Welcome",
             body=(
-                f"Your account «{user.username}» is ready. "
+                f'Your account "{user.username}" is ready. '
                 "You can sign in with the credentials you were given."
             ),
             kind=Notification.KIND_SUCCESS,
